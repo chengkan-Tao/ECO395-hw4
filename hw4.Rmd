@@ -1,0 +1,242 @@
+---
+title: "hw4"
+author:
+- chengkan_tao
+- ~
+- ~
+documentclass: ctexart
+output: rticles::ctex
+keywords:
+- 中文
+- R Markdown
+---
+```{r eval=FALSE}
+devtools::install_github(c('rstudio/rmarkdown', 'yihui/tinytex'))
+tinytex::install_tinytex()
+```
+
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(fig.width=12, fig.height=8, fig.path='Figs/',
+                      echo=FALSE, warning=FALSE, message=FALSE)
+```
+
+```{r, include=FALSE}
+options(tinytex.verbose = TRUE)
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r, include=FALSE}
+library(tidyverse)
+library(mosaic)
+library(ggplot2)
+library(LICORS)
+library(foreach)
+library(tm)
+library(slam)
+library(proxy)
+library(arules)
+library(arulesViz)
+library(igraph)
+library(gamlr)
+library(SnowballC)
+library(class)
+library(foreach)
+hansen_dwi <- read.csv("~/GitHub/CAUSAL INFERENCE CLASS/causal-inference-class/Data/hansen_dwi.csv", header=TRUE)
+
+```
+##hw4
+
+#1
+#cluster
+```{r, echo=TRUE}
+wine <- read.csv("~/GitHub/DATA MINING/ECO395M/data/wine.csv")
+summary(wine)
+W = wine[,-(12:13)]
+wine_scale = scale(W, center=TRUE, scale=TRUE)
+
+mu = attr(W,"scaled:center")
+sigma = attr(W,"scaled:scale")
+cluster1 = kmeanspp(W, 2, nstart=25)
+cluster1$center
+cluster1$center[1,]*sigma + mu
+cluster1$center[2,]*sigma + mu
+which(cluster1$cluster == 1)
+which(cluster1$cluster == 2)
+qplot(fixed.acidity, volatile.acidity, data=wine, color=factor(cluster1$cluster))
+qplot(fixed.acidity, volatile.acidity, data=wine, color=factor(color))
+```
+pre_process:remove quality and color; Z-score.
+Now I get 2 clusters. Choose two acidities to export 2 figures. I find the method can not distinguishing red wine from white wine well. The figure with fact shows that red points and green points are not mixed obviously.
+
+```{r, echo=TRUE}
+cluster2 = kmeanspp(W, 7, nstart=25)
+cluster2$center
+cluster2$center[1,]*sigma + mu
+cluster2$center[2,]*sigma + mu
+
+which(cluster2$cluster == 1)
+which(cluster2$cluster == 2)
+
+qplot(fixed.acidity, volatile.acidity, data=wine, color=factor(cluster2$cluster))
+qplot(fixed.acidity, volatile.acidity, data=wine, color=factor(quality))
+```
+Now I get 7 clusters. Choose two acidities to export 2 figures. I hardly see all 7 colors in the quality picture and there are obviously many colors in cluster picture. So it can not distinguish different qualities. 
+
+
+
+#pca
+```{r, echo=TRUE}
+pc_W = prcomp(W, rank=1)
+summary(pc_W)
+pc_W$rotation
+```
+PCA explains about 95% variance and cumulative proportion is about 95%.
+We find coef of free.surfur.dioxide and total.sulfur.dioxide is relatively large. So the component explains more about these two.
+
+
+
+
+
+
+
+
+
+
+
+#2
+```{r, echo=TRUE}
+social_marketing = read.csv("~/GitHub/DATA MINING/ECO395M/data/social_marketing.csv")
+
+S = social_marketing[,-1]
+S = S[,-36]
+S_scale = scale(S, center=TRUE, scale=TRUE)
+
+```
+pre-process:remove users and adult;Z-score
+
+
+#a(PCA)
+```{r, echo=TRUE}
+PCA = prcomp(S, rank = 25)
+summary(PCA)
+PCA$rotation
+```
+#b(PCA)
+```{r, echo=TRUE}
+PCA = prcomp(S, scale = TRUE)
+summary(PCA)
+PCA$rotation
+```
+I run 2 PCA. When I choose rank as 4, I find the cumulative proportion is too low. So rank is equal to 25 now and the cumulative proportion is nearly 96%. In the second PCA, I get 36 components and the cumulative proportion is equal to 100%.
+Then I find that there are too many PCS in both 2 analysis. I cannot list the groups one by one. In each component, if most coefficients have the same sign(positive or negative), I will choose 3 categories with highest absolute values as a group.
+
+#c(correlation matrix)
+```{r, echo=TRUE}
+cor = cor(S)
+cor
+```
+A easy way to find correlation. We can find some correlated categories through the number in the matrix. For example, coef of correlation between politics and travel is about 0.66021;coef of correlation between religion and sports_fandom is about 0.6379748428. 
+Hence, these two methods can find groups. With these groups, the ad firm knows what audience are interested in, and focus on these categories.
+
+
+
+
+
+
+
+
+#3
+```{r, echo=TRUE}
+playlists_raw = read.csv("C:/Users/30970/Documents/GitHub/DATA MINING/ECO395M/data/playlists.csv")
+str(playlists_raw)
+summary(playlists_raw)
+groceries = read.transactions("C:/Users/30970/Documents/GitHub/DATA MINING/ECO395M/data/groceries.txt", format = c("basket"), sep = ",")
+groceriesrules = apriori(groceries, parameter=list(support=.005, confidence=.1, maxlen=2))
+```
+Thresholds: all the rules have support at least 0.005, have confidence at least 0.1 and maximium leagth is 2
+
+
+#RULES
+```{r, echo=TRUE}
+inspect(groceriesrules)
+plot(groceriesrules)
+```
+There are few points with darker color. Most of these points(high lift) have less confidence and less support.
+
+
+
+
+
+#4
+#train PRO-PROCESS
+```{r, echo=TRUE}
+train_dirs = Sys.glob('C:/Users/30970/Documents/GitHub/DATA MINING/ECO395M/data/ReutersC50/C50train/*')
+file_list = NULL
+labels_train = NULL
+for(author in train_dirs) {
+  author_name = substring(author, first=77)
+  files_to_add = Sys.glob(paste0(author, '/*.txt'))
+  file_list = append(file_list, files_to_add)
+  labels_train = append(labels_train, rep(author_name, length(files_to_add)))
+}
+corpus_train = Corpus(DirSource(train_dirs)) 
+corpus_train = corpus_train %>% tm_map(., content_transformer(tolower)) %>% 
+  tm_map(., content_transformer(removeNumbers)) %>% 
+  tm_map(., content_transformer(removeNumbers)) %>% 
+  tm_map(., content_transformer(removePunctuation)) %>%
+  tm_map(., content_transformer(stripWhitespace)) %>%
+  tm_map(., content_transformer(removeWords), stopwords("SMART"))
+```
+#test PRO-PROCESS
+```{r, echo=TRUE}
+test_dirs = Sys.glob('C:/Users/30970/Documents/GitHub/DATA MINING/ECO395M/data/ReutersC50/C50test/*')
+file_list = NULL
+labels_test = NULL
+for(author in test_dirs) {
+  author_name = substring(author, first=77)
+  files_to_add = Sys.glob(paste0(author, '/*.txt'))
+  file_list = append(file_list, files_to_add)
+  labels_test = append(labels_test, rep(author_name, length(files_to_add)))
+}
+corpus_test = Corpus(DirSource(test_dirs)) 
+corpus_test = corpus_test %>% tm_map(., content_transformer(tolower)) %>% 
+  tm_map(., content_transformer(removeNumbers)) %>% 
+  tm_map(., content_transformer(removePunctuation)) %>%
+  tm_map(., content_transformer(stripWhitespace)) %>%
+  tm_map(., content_transformer(removeWords), stopwords("SMART")) 
+```
+pre-process: In the both sets, make everything lowercase, and remove numbers, punctuation, excess white-space, stopwords. Roll two directories together into a single corpus.
+
+
+```{r, echo=TRUE}
+DTM_train = DocumentTermMatrix(corpus_train)
+DTM_test = DocumentTermMatrix(corpus_test,
+                              control = list(dictionary=Terms(DTM_train)))
+```
+doc-term-matrix for train and test sets. And the test matrix has the same terms with train test. I fail to figure out a way to add a pseudo-word to the training set.
+
+
+```{r, echo=TRUE}
+sort = labels_train[seq(1,2500,50)]
+
+foreach(i=1:50) %do%
+  {
+    y_train = 0 + {labels_train==sort[i]}
+    y_test = 0 + {labels_test==sort[i]}
+    logit = cv.gamlr(DTM_train, y_train, family='binomial', nfold=5)
+    yhat_test = predict(logit, DTM_test, type='response')
+    xtabs(~ {yhat_test > 0.75} + y_test)
+  }
+```
+
+The method is lasso logistic regression. However my result is too terrible. In each table, more than 2000 False and less than 500 true show that it is not identical with my expectation. I can change the threshold to get a better result. But it is still a bad result.
+
+
+
+
+
+
